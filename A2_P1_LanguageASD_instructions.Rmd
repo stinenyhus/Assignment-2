@@ -107,6 +107,8 @@ Describe the characteristics of the two groups of participants and whether the t
 clean %>% subset(VISIT == "1") %>% group_by(Diagnosis, Gender) %>% summarise(SUBJ = n())
 
 clean %>% subset(VISIT == "1") %>% group_by(Diagnosis, Ethnicity) %>% summarise(SUBJ = n())
+
+
 ```
 
 The sample included mostly young (<20) white males ...
