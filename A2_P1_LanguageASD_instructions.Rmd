@@ -105,6 +105,8 @@ Describe the characteristics of the two groups of participants and whether the t
 ```{r descriptive stats, include = FALSE}
 #Grouping by diagnosis and gender to see how many girls and boys are in each diagnosis group
 clean %>% subset(VISIT == "1") %>% group_by(Diagnosis, Gender) %>% summarise(SUBJ = n(), mean(Age)) 
+
+clean %>% subset(VISIT == "1") %>% group_by(Diagnosis) %>% summarise(SUBJ = n(), mean(Age))
 #Equal distribution of gender
 
 clean %>% subset(VISIT == "1") %>% group_by(Diagnosis) %>% summarise(mean(CHI_MLU), mean(MOT_MLU),
@@ -113,11 +115,13 @@ clean %>% subset(VISIT == "1") %>% group_by(Diagnosis) %>% summarise(mean(CHI_ML
 #TD kids have better socialization skills - not a problem for matching the groups 
 #Token = total words, types = unique words 
 
-clean %>% subset(VISIT == "1") %>% group_by(Diagnosis, Ethnicity) %>% summarise(SUBJ = n())
-#OK equal distribution of ethnicity 
+ethnicity <- clean %>% subset(VISIT == "1") %>% group_by(Diagnosis, Ethnicity) %>% summarise(SUBJ = n())
 
-clean %>% subset(VISIT == "1") %>% ggplot(aes(Diagnosis, Gender))+
-  geom_bar()
+write.table(ethnicity, file = "Ethnicity_table")
+summary()
+
+?write.table()
+#OK equal distribution of ethnicity 
 
 ```
 
@@ -139,12 +143,18 @@ Remember to plot the data first and then to run a statistical test.
 #Plotting the data 
 ggplot(clean, aes(VISIT, CHI_MLU, fill = Diagnosis))+
   geom_bar(stat = "summary", position = "dodge")+
-  geom_errorbar(stat = "summary", position = position_dodge(width = 0.9))
+  geom_errorbar(stat = "summary", position = position_dodge(width = 0.9))+
+  xlab("Visit")+
+  ylab("Mean length of utterance - child")+
+  scale_x_continuous(breaks = seq(1, 6, 1))
 #Barplot showing language development over the visits per diagnosis
 
 ggplot(clean, aes(VISIT, CHI_MLU, color = Diagnosis))+
   geom_point()+
-  geom_smooth(method = "lm")
+  geom_smooth(method = "lm")+
+  xlab("Visit")+
+  ylab("Mean length of utterance - child")+
+  scale_x_continuous(breaks = seq(1, 6, 1))
 
 #Making SUBJ factor so the plot gives each subject a unique color
 clean$SUBJ <- as.factor(clean$SUBJ)
@@ -153,7 +163,10 @@ ggplot(clean, aes(VISIT, CHI_MLU, group = SUBJ, color = SUBJ))+
   geom_point()+
   geom_smooth(method = "lm", alpha = 0)+
   facet_wrap(.~Diagnosis)+
-  theme(legend.position = "none")
+  theme(legend.position = "none")+
+  xlab("Visit")+
+  ylab("Mean length of utterance - child")+
+  scale_x_continuous(breaks = seq(1, 6, 1))
 
 #Making first model
 model1 <- lmer(CHI_MLU ~ VISIT*Diagnosis + (1+VISIT|SUBJ), clean, REML =F)
@@ -249,6 +262,12 @@ summary(chi_model3)
 
 chi_model4 <- lmer(CHI_MLU ~ VISIT*Diagnosis + (1+VISIT+ExpressiveLangRawv1+MullenRawv1+Socializationv1|SUBJ), clean, REML=F)
 summary(chi_model4)
+
+chi_model5 <- lmer(CHI_MLU ~ VISIT*Diagnosis + ExpressiveLangRawv1 + MOT_MLU + (1+VISIT|SUBJ), clean, REML=F)
+summary(chi_model5)
+
+anova(model0, chi_model5)
+MuMIn::r.squaredGLMM(chi_model5)
 ```
 
 In addition to ..., the MLU of the children is also correlated with ...
