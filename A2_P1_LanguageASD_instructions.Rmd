@@ -118,7 +118,6 @@ clean %>% subset(VISIT == "1") %>% group_by(Diagnosis) %>% summarise(mean(CHI_ML
 ethnicity <- clean %>% subset(VISIT == "1") %>% group_by(Diagnosis, Ethnicity) %>% summarise(SUBJ = n())
 
 write.table(ethnicity, file = "Ethnicity_table")
-summary()
 
 ?write.table()
 #OK equal distribution of ethnicity 
