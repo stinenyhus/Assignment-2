@@ -47,14 +47,14 @@ How did your models from last time perform? In this exercise you have to compare
 
 ```{r, include = FALSE}
 
-pacman::p_load(readr,dplyr,stringr,lmerTest,Metrics,caret)
+pacman::p_load(readr,dplyr,stringr,lmerTest,Metrics,caret, tidyverse, groupdata2)
 
 ## Clean up function, included to inspire you
 
-CleanUpData <- function(Demo,LU,Word){
+  CleanUpData <- function(Demo,LU,Word){
   
   Speech <- merge(LU, Word) %>% 
-    rename(
+    dplyr::rename(
       Child.ID = SUBJ, 
       Visit=VISIT) %>%
     mutate(
@@ -73,17 +73,17 @@ CleanUpData <- function(Demo,LU,Word){
       Child.ID = gsub("\\.","", Child.ID)
     )
     
-  Data=merge(Demo,Speech,all=T)
+  Data=merge(Demo,Speech,all=F) #Originally from RF, all = T but we changed it to all = F to omit NA's
   
   Data1= Data %>% 
      subset(Visit=="1") %>% 
      dplyr::select(Child.ID, ADOS, ExpressiveLangRaw, MullenRaw, Socialization) %>%
-     rename(Ados1 = ADOS, 
+     dplyr::rename(Ados1 = ADOS, 
             verbalIQ1 = ExpressiveLangRaw, 
             nonVerbalIQ1 = MullenRaw,
             Socialization1 = Socialization) 
   
-  Data=merge(Data, Data1, all=T) %>%
+  Data=merge(Data, Data1, all=F) %>% #Changing the model to all = F to remove NA's
     mutate(
       Child.ID = as.numeric(as.factor(as.character(Child.ID))),
       Visit = as.numeric(as.character(Visit)),
@@ -99,20 +99,30 @@ CleanUpData <- function(Demo,LU,Word){
 }
 
 # Load training Data
-
-
-#- recreate the models you chose last time (just write the code again and apply it to Train Data)
-
-
-#- calculate performance of the model on the training data: root mean square error is a good measure. (Tip: google the function rmse())
-
-
+training_data <- CleanUpData(Demo = read.csv("demo_train.csv"), LU = read.csv("LU_train.csv"), Word = read.csv("token_train.csv"))
 
 #- create the test dataset (apply the code from assignment 1 or my function to clean up the 3 test datasets)
 # Test data
 
-#- test the performance of the models on the test data (Tips: google the functions "predict()")
+test_data <- CleanUpData(Demo = read.csv("demo_test.csv"), LU = read.csv("LU_test.csv"), Word = read.csv("token_test.csv"))
 
+#- recreate the models you chose last time (just write the code again and apply it to Train Data)
+model1 <- lmer(CHI_MLU ~ Visit*Diagnosis*verbalIQ1+MOT_MLU+verbalIQ1:MOT_MLU + (1+Visit|Child.ID), data = training_data, REML=F) # Not using this one, we chose to use the non-dredged one
+
+model2 <- lmer(CHI_MLU ~ Visit*Diagnosis + verbalIQ1 + MOT_MLU + (1+Visit|Child.ID), data = training_data, REML = F)
+
+summary(model2)
+MuMIn::r.squaredGLMM(model2)
+
+#- calculate performance of the model on the training data: root mean square error is a good measure. (Tip: google the function rmse())
+rmse(training_data$CHI_MLU, predict(model1)) #0.340
+rmse(training_data$CHI_MLU, predict(model2)) #0.342 
+
+#How rmse() works: take the root mean squared error(actual values, predict using(this model, on this data))
+
+#- test the performance of the models on the test data (Tips: google the functions "predict()")
+rmse(test_data$CHI_MLU, predict(model1,test_data)) #0.487 - dredged model
+rmse(test_data$CHI_MLU, predict(model2,test_data)) #0.489 - own model 
 
 #- optional: predictions are never certain, can you identify the uncertainty of the predictions? (e.g. google predictinterval())
 
@@ -138,8 +148,38 @@ In this exercise you have to use cross-validation to calculate the predictive er
 
 ```{r}
 #- Create the basic model of ChildMLU as a function of Time and Diagnosis (don't forget the random effects!).
+basic <- lmer(CHI_MLU ~ Visit*Diagnosis + (1+Visit|Diagnosis), training_data, REML =F)
 
 #- Make a cross-validated version of the model. (Tips: google the function "createFolds";  loop through each fold, train a model on the other folds and test it on the fold)
+
+set.seed(12)
+
+#Using the function fold from the package groupdata2 - making sure that the variable diagnosis is represented in all folds and that all data from one child is in the same fold.
+folds3 <- fold(training_data, k = 5, cat_col = "Diagnosis", id_col = "Child.ID")
+
+#loop for basic model
+result <- c() #Making empty list in order for the loop to put something in it
+loop <- {for (i in unique(folds3[[".folds"]])){
+  test <- subset(folds3, .folds == i)
+  train <- subset(folds3, .folds != i)
+  model <- lmer(CHI_MLU ~ Visit*Diagnosis + (1+Visit|Diagnosis), train, REML = F)
+  result[i] <- rmse(test$CHI_MLU, predict(model,test))
+  print(result[i])}
+  print(c("result" = mean(result)))
+}
+
+#Loop for own model
+result <- c()
+loop <- {for (i in unique(folds3[[".folds"]])){
+  test <- subset(folds3, .folds == i)
+  train <- subset(folds3, .folds != i)
+  model <- lmer(CHI_MLU ~ Visit*Diagnosis + verbalIQ1 + MOT_MLU + (1+Visit|Diagnosis), train, REML = F)
+  result[i] <- rmse(test$CHI_MLU, predict(model,test))
+  print(result[i])}
+  print(c("result" = mean(result)))
+}
+
+
 
 #- Report the results and comment on them. 
 
@@ -164,7 +204,36 @@ You want to evaluate:
 - how does the child fare compared to the model predictions at Visit 6? Is the child below or above expectations? (tip: use the predict() function on Bernie's data only and compare the prediction with the actual performance of the child)
 
 ```{r}
+#Filtering Bernie from test data
+bernie<-filter(test_data,Child.ID=="2")
 
+#Measuring mean MLU from TD kids in train data
+
+tds<-filter(test_data,Diagnosis=="TD")
+tds
+
+#Means of average TD kid pr visit 
+means<-aggregate(CHI_MLU~Visit,data=tds,mean)
+print(means)
+
+absolute<-(means$CHI_MLU)-(bernie$CHI_MLU)
+absolute
+absolute1<-bernie$CHI_MLU-means$CHI_MLU
+print(absolute1)
+
+#The average child increases its MLU (much) slower than Bernie.
+
+#How does the child fare compared to the model predictions at Visit 6? Is the child below or above expectations? (tip: use the predict() function on Bernie's data only and compare the prediction with the actual performance of the child)
+
+
+#0.50 - average of squared residuals for each data point
+
+#Creating df with Bernies data only with visit 6 
+berniev6<-filter(bernie,Visit=="6")
+
+
+predict(model1, bernie)
+#3.347
 ```
 
 
